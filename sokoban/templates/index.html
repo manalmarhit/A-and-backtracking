@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SokoBot — Sokoban Solver</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface2: #1c2029;
+  --border: #262a36;
+  --text: #dfe2ec;
+  --dim: #6b7084;
+  --accent: #f0883e;
+  --accent2: #e85d75;
+  --teal: #2dd4a8;
+  --blue: #5b9df5;
+  --yellow: #f5c842;
+  --cell-size: 48px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; overflow-x: hidden;
+}
+
+header {
+  padding: 1.2rem 2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: baseline; gap: 0.8rem;
+  background: linear-gradient(180deg, #12151d 0%, var(--bg) 100%);
+}
+header h1 {
+  font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+header .sub {
+  font-size: 0.82rem; color: var(--dim); font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+
+.app { display: flex; height: calc(100vh - 58px); }
+
+.sidebar {
+  width: 290px; border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 1rem; flex-shrink: 0;
+  background: var(--surface);
+}
+.main {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 1.5rem; gap: 1rem; overflow-y: auto;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 2px; margin-bottom: 1rem;
+  background: var(--bg); border-radius: 8px; padding: 3px;
+}
+.tab {
+  flex: 1; padding: 0.5rem 0.6rem; border: none;
+  background: transparent; color: var(--dim); cursor: pointer;
+  border-radius: 6px; font-family: inherit; font-size: 0.78rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  transition: all 0.15s;
+}
+.tab.active { background: var(--accent); color: #fff; }
+.tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+
+/* Puzzle cards */
+.puzzle-card {
+  padding: 0.65rem 0.85rem; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 0.4rem; cursor: pointer; transition: all 0.15s;
+}
+.puzzle-card:hover { border-color: var(--accent); }
+.puzzle-card.sel { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.puzzle-card h3 { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.15rem; }
+.puzzle-card p { font-size: 0.72rem; color: var(--dim); }
+.puzzle-card .stars { color: var(--yellow); font-size: 0.78rem; }
+
+/* Board */
+.board {
+  display: inline-grid; gap: 2px; padding: 3px;
+  border-radius: 10px; border: 2px solid var(--border);
+  background: var(--bg); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.cell {
+  width: var(--cell-size); height: var(--cell-size);
+  border-radius: 4px; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.c-floor { background: #181c28; }
+.c-wall {
+  background: #3a3f54;
+  background-image: linear-gradient(135deg, #44495e 25%, transparent 25%),
+                    linear-gradient(225deg, #44495e 25%, transparent 25%);
+  background-size: 8px 8px; border-radius: 2px;
+}
+.c-goal::after {
+  content: ''; position: absolute;
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2.5px solid var(--yellow); opacity: 0.55;
+}
+
+/* Sprites */
+.sprite { position: absolute; }
+.s-box {
+  width: 36px; height: 36px; background: var(--accent2);
+  border-radius: 6px;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35), 0 2px 6px rgba(232,93,117,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; line-height: 1;
+}
+.s-box.done {
+  background: var(--teal);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3), 0 2px 10px rgba(45,212,168,0.4);
+}
+.s-player {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+
+/* Controls */
+.controls {
+  display: flex; gap: 0.5rem; align-items: center;
+  flex-wrap: wrap; justify-content: center;
+}
+.btn {
+  padding: 0.55rem 1.1rem; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  border-radius: 6px; cursor: pointer; font-family: inherit;
+  font-size: 0.82rem; font-weight: 600; transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent); background: var(--surface2); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-go {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 700;
+}
+.btn-go:hover { background: #f5963e; }
+
+.badge {
+  display: inline-block; padding: 0.4rem 0.9rem; border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600;
+}
+.b-idle { background: var(--surface2); color: var(--dim); }
+.b-work { background: #2a1a0a; color: var(--accent); animation: pulse 1s infinite; }
+.b-done { background: #0e2a22; color: var(--teal); }
+.b-fail { background: #2a1212; color: var(--accent2); }
+
+.step-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem; color: var(--dim); text-align: center;
+}
+
+.speed-ctrl { display: flex; align-items: center; gap: 0.4rem; }
+.speed-ctrl label { font-size: 0.75rem; color: var(--dim); }
+.speed-ctrl input[type=range] { width: 80px; accent-color: var(--accent); }
+
+/* Designer */
+.designer-tab { display: none; }
+.designer-tab.show { display: block; }
+.tools { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.tool {
+  padding: 0.4rem 0.6rem; border: 2px solid var(--border);
+  background: var(--bg); color: var(--text); border-radius: 6px;
+  cursor: pointer; font-family: inherit; font-size: 0.75rem;
+  font-weight: 700; display: flex; align-items: center; gap: 0.35rem;
+  transition: all 0.15s;
+}
+.tool.on { border-color: var(--accent); background: rgba(240,136,62,0.1); }
+.tool:hover { border-color: var(--accent); }
+.tool .sw { width: 14px; height: 14px; border-radius: 3px; }
+.size-row {
+  display: flex; gap: 0.4rem; align-items: center;
+  margin-bottom: 0.8rem; font-size: 0.8rem;
+}
+.size-row input {
+  width: 44px; padding: 0.25rem; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font-family: inherit; text-align: center;
+}
+.size-row label { color: var(--dim); }
+.d-status { font-size: 0.78rem; color: var(--dim); margin-top: 0.5rem; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.board.designer .cell { cursor: pointer; }
+.board.designer .cell:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SokoBot</h1>
+  <span class="sub">A* Sokoban Solver</span>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="tabs">
+      <button class="tab active" id="tab-puz" onclick="switchTab('puz')">Puzzles</button>
+      <button class="tab" id="tab-des" onclick="switchTab('des')">Designer</button>
+    </div>
+    <div id="puz-tab"><div id="puz-list"></div></div>
+    <div id="des-tab" class="designer-tab">
+      <div class="size-row">
+        <label>W</label><input type="number" id="gw" value="7" min="3" max="12">
+        <label>H</label><input type="number" id="gh" value="7" min="3" max="12">
+        <button class="btn" onclick="initDesigner()">Resize</button>
+      </div>
+      <div class="tools">
+        <button class="tool on" data-t="wall" onclick="pickTool('wall')"><span class="sw" style="background:#3a3f54"></span>Wall</button>
+        <button class="tool" data-t="floor" onclick="pickTool('floor')"><span class="sw" style="background:#181c28"></span>Floor</button>
+        <button class="tool" data-t="box" onclick="pickTool('box')"><span class="sw" style="background:var(--accent2)"></span>Box</button>
+        <button class="tool" data-t="goal" onclick="pickTool('goal')"><span class="sw" style="background:var(--yellow)"></span>Goal</button>
+        <button class="tool" data-t="player" onclick="pickTool('player')"><span class="sw" style="background:var(--blue)"></span>Player</button>
+      </div>
+      <div style="display:flex;gap:0.4rem">
+        <button class="btn btn-go" onclick="solveDesigned()">Solve</button>
+        <button class="btn" onclick="initDesigner()">Clear</button>
+      </div>
+      <div class="d-status" id="d-status"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="board" class="board"></div>
+    <div id="status" class="badge b-idle">Select a puzzle to start</div>
+    <div class="controls">
+      <button class="btn btn-go" id="bSolve" onclick="doSolve()" disabled>Solve</button>
+      <button class="btn" id="bPrev" onclick="stepPrev()" disabled>◀</button>
+      <button class="btn" id="bPlay" onclick="togglePlay()" disabled>▶ Play</button>
+      <button class="btn" id="bNext" onclick="stepNext()" disabled>▶</button>
+      <button class="btn" id="bReset" onclick="doReset()" disabled>Reset</button>
+      <div class="speed-ctrl">
+        <label>Speed</label>
+        <input type="range" id="speed" min="1" max="10" value="5">
+      </div>
+    </div>
+    <div id="stepLabel" class="step-label"></div>
+  </div>
+</div>
+
+<script>
+let puzzles = {};
+let curPuzzleMap = null;
+let solutionData = null; // {frames, walls, goals, width, height, pushes}
+let step = 0;
+let playing = false;
+let playTimer = null;
+
+// Designer state
+let curTool = 'wall';
+let dGrid = [], dW = 7, dH = 7;
+
+const el = id => document.getElementById(id);
+
+// ====== INIT ======
+async function init() {
+  const res = await fetch('/api/puzzles');
+  puzzles = await res.json();
+  renderPuzzleList();
+}
+
+function renderPuzzleList() {
+  const list = el('puz-list');
+  list.innerHTML = '';
+  for (const [name, data] of Object.entries(puzzles)) {
+    const card = document.createElement('div');
+    card.className = 'puzzle-card';
+    card.innerHTML = `<h3>${name}</h3><p>${data.description}</p><span class="stars">${data.difficulty}</span>`;
+    card.onclick = () => selectPuzzle(name, card);
+    list.appendChild(card);
+  }
+}
+
+// ====== TABS ======
+function switchTab(t) {
+  el('tab-puz').classList.toggle('active', t === 'puz');
+  el('tab-des').classList.toggle('active', t === 'des');
+  el('puz-tab').style.display = t === 'puz' ? 'block' : 'none';
+  el('des-tab').style.display = t === 'des' ? 'block' : 'none';
+  el('des-tab').classList.toggle('show', t === 'des');
+  if (t === 'des') initDesigner();
+}
+
+// ====== PUZZLE SELECTION ======
+function selectPuzzle(name, card) {
+  document.querySelectorAll('.puzzle-card').forEach(c => c.classList.remove('sel'));
+  card.classList.add('sel');
+  curPuzzleMap = puzzles[name].map;
+  solutionData = null;
+  step = 0;
+  stopPlay();
+  renderBoardFromText(curPuzzleMap);
+  setStatus('idle', `Loaded: ${name}. Click Solve!`);
+  el('bSolve').disabled = false;
+  enableSteps(false);
+  el('stepLabel').textContent = '';
+}
+
+// ====== BOARD RENDERING ======
+function parseMapText(text) {
+  const lines = text.split('\n');
+  const H = lines.length, W = Math.max(...lines.map(l => l.length));
+  const walls = new Set(), goals = new Set(), boxes = new Set();
+  let player = null;
+  for (let r = 0; r < H; r++) for (let c = 0; c < (lines[r] || '').length; c++) {
+    const ch = lines[r][c], k = r + ',' + c;
+    if (ch === '#') walls.add(k);
+    else if (ch === '$') boxes.add(k);
+    else if (ch === '.') goals.add(k);
+    else if (ch === '@') player = k;
+    else if (ch === '*') { boxes.add(k); goals.add(k); }
+    else if (ch === '+') { player = k; goals.add(k); }
+  }
+  return { walls, goals, boxes, player, W, H };
+}
+
+function renderBoardFromText(text) {
+  const p = parseMapText(text);
+  renderBoard(p.walls, p.goals, p.boxes, p.player, p.W, p.H, false);
+}
+
+function renderBoard(walls, goals, boxes, player, W, H, designer) {
+  const board = el('board');
+  board.className = designer ? 'board designer' : 'board';
+  board.style.gridTemplateColumns = `repeat(${W}, var(--cell-size))`;
+  board.innerHTML = '';
+
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const k = r + ',' + c;
+    const isW = walls.has(k), isG = goals.has(k), isB = boxes.has(k), isP = player === k;
+
+    if (isW) {
+      cell.classList.add('c-wall');
+    } else {
+      cell.classList.add('c-floor');
+      if (isG) cell.classList.add('c-goal');
+      if (isB) {
+        const sp = document.createElement('div');
+        sp.className = 'sprite s-box' + (isG ? ' done' : '');
+        sp.textContent = isG ? '✅' : '📦';
+        cell.appendChild(sp);
+      }
+      if (isP) {
+        const sp = document.createElement('div');
+        sp.className = 'sprite s-player';
+        sp.textContent = '🏃';
+        cell.appendChild(sp);
+      }
+    }
+
+    if (designer) {
+      cell.dataset.r = r; cell.dataset.c = c;
+      cell.onmousedown = e => { paint(r, c); e.preventDefault(); };
+      cell.onmouseenter = e => { if (e.buttons === 1) paint(r, c); };
+    }
+    board.appendChild(cell);
+  }
+}
+
+// ====== FRAME RENDERING ======
+function renderFrame(idx) {
+  if (!solutionData || idx < 0 || idx >= solutionData.frames.length) return;
+  const f = solutionData.frames[idx];
+  const wallsSet = new Set(solutionData.walls.map(w => w[0] + ',' + w[1]));
+  const goalsSet = new Set(solutionData.goals.map(g => g[0] + ',' + g[1]));
+  const boxesSet = new Set(f.boxes.map(b => b[0] + ',' + b[1]));
+  const playerKey = f.player[0] + ',' + f.player[1];
+
+  renderBoard(wallsSet, goalsSet, boxesSet, playerKey, solutionData.width, solutionData.height, false);
+  el('stepLabel').textContent = `Move ${idx} / ${solutionData.frames.length - 1}  ·  ${f.label}`;
+  el('bPrev').disabled = idx <= 0;
+  el('bNext').disabled = idx >= solutionData.frames.length - 1;
+}
+
+// ====== SOLVING ======
+async function doSolve() {
+  if (!curPuzzleMap) return;
+  setStatus('work', 'Solving…');
+  el('bSolve').disabled = true;
+  enableSteps(false);
+
+  try {
+    const res = await fetch('/api/solve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map: curPuzzleMap })
+    });
+    const data = await res.json();
+
+    if (data.solved) {
+      solutionData = data;
+      step = 0;
+      setStatus('done', `Solved! ${data.pushes} pushes, ${data.frames.length - 1} moves total (${data.time}s)`);
+      enableSteps(true);
+      renderFrame(0);
+    } else {
+      setStatus('fail', data.message || 'No solution found');
+      el('bSolve').disabled = false;
+    }
+  } catch (e) {
+    setStatus('fail', 'Error connecting to solver');
+    el('bSolve').disabled = false;
+  }
+}
+
+// ====== STEP CONTROLS ======
+function stepNext() { if (!solutionData || step >= solutionData.frames.length - 1) return; step++; renderFrame(step); }
+function stepPrev() { if (!solutionData || step <= 0) return; step--; renderFrame(step); }
+
+function togglePlay() {
+  if (playing) stopPlay();
+  else { playing = true; el('bPlay').textContent = '⏸ Pause'; tick(); }
+}
+
+function tick() {
+  if (!playing) return;
+  if (step >= solutionData.frames.length - 1) { stopPlay(); return; }
+  stepNext();
+  const spd = parseInt(el('speed').value);
+  const ms = Math.max(500 - spd * 40, 60);
+  playTimer = setTimeout(tick, ms);
+}
+
+function stopPlay() {
+  playing = false;
+  clearTimeout(playTimer); playTimer = null;
+  el('bPlay').textContent = '▶ Play';
+}
+
+function doReset() { stopPlay(); step = 0; if (solutionData) renderFrame(0); }
+
+function enableSteps(on) {
+  ['bPrev', 'bPlay', 'bNext', 'bReset'].forEach(id => el(id).disabled = !on);
+}
+
+function setStatus(type, msg) {
+  const s = el('status'); s.className = 'badge b-' + type; s.textContent = msg;
+}
+
+// ====== DESIGNER ======
+function initDesigner() {
+  dW = parseInt(el('gw').value); dH = parseInt(el('gh').value);
+  dGrid = [];
+  for (let r = 0; r < dH; r++) {
+    dGrid[r] = [];
+    for (let c = 0; c < dW; c++)
+      dGrid[r][c] = (r === 0 || r === dH - 1 || c === 0 || c === dW - 1) ? 'wall' : 'floor';
+  }
+  renderDesigner(); updateDStatus();
+}
+
+function pickTool(t) {
+  curTool = t;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+
+function paint(r, c) {
+  if (curTool !== 'wall' && curTool !== 'floor' && (r === 0 || r === dH - 1 || c === 0 || c === dW - 1)) return;
+  if (curTool === 'player')
+    for (let rr = 0; rr < dH; rr++) for (let cc = 0; cc < dW; cc++)
+      if (dGrid[rr][cc] === 'player') dGrid[rr][cc] = 'floor';
+  dGrid[r][c] = curTool;
+  renderDesigner(); updateDStatus();
+}
+
+function renderDesigner() {
+  const walls = new Set(), goals = new Set(), boxes = new Set();
+  let player = null;
+  for (let r = 0; r < dH; r++) for (let c = 0; c < dW; c++) {
+    const k = r + ',' + c, v = dGrid[r][c];
+    if (v === 'wall') walls.add(k); else if (v === 'box') boxes.add(k);
+    else if (v === 'goal') goals.add(k); else if (v === 'player') player = k;
+  }
+  renderBoard(walls, goals, boxes, player, dW, dH, true);
+}
+
+function updateDStatus() {
+  let nb = 0, ng = 0, hp = false;
+  for (let r = 0; r < dH; r++) for (let c = 0; c < dW; c++) {
+    if (dGrid[r][c] === 'box') nb++;
+    if (dGrid[r][c] === 'goal') ng++;
+    if (dGrid[r][c] === 'player') hp = true;
+  }
+  const issues = [];
+  if (!hp) issues.push('Need player');
+  if (nb === 0) issues.push('Need boxes');
+  if (nb !== ng) issues.push(nb + ' boxes ≠ ' + ng + ' goals');
+  const s = el('d-status');
+  if (issues.length) { s.style.color = 'var(--yellow)'; s.textContent = issues.join(' · '); }
+  else { s.style.color = 'var(--teal)'; s.textContent = 'Ready! ' + nb + ' box' + (nb > 1 ? 'es' : '') + ', ' + ng + ' goal' + (ng > 1 ? 's' : ''); }
+}
+
+function designerToMap() {
+  const m = { wall: '#', floor: ' ', box: '$', goal: '.', player: '@' };
+  return dGrid.map(row => row.map(c => m[c] || ' ').join('')).join('\n');
+}
+
+async function solveDesigned() {
+  curPuzzleMap = designerToMap();
+  document.querySelectorAll('.puzzle-card').forEach(c => c.classList.remove('sel'));
+  renderBoardFromText(curPuzzleMap);
+  await doSolve();
+}
+
+// ====== BOOT ======
+init();
+</script>
+</body>
+</html>
